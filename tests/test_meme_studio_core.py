@@ -19,6 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MemeStudioCoreTest(unittest.TestCase):
+    def test_legacy_core_module_reexports_renderer_api(self):
+        import meme_studio_core
+        from meme_studio import renderer
+
+        self.assertIs(meme_studio_core.validate_manifest, renderer.validate_manifest)
+        self.assertIs(meme_studio_core.render_manifest, renderer.render_manifest)
+
     def test_validate_command_name_rejects_unsafe_path_text(self):
         for value in ("../坏", "坏/名", "坏\\名", "", "   "):
             with self.subTest(value=value):

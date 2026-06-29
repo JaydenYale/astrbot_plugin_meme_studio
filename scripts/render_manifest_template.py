@@ -8,7 +8,10 @@ sys.path.insert(0, str(ROOT))
 
 
 def main(argv: list[str]) -> int:
-    from meme_studio_core import render_manifest
+    try:
+        from meme_studio.renderer import render_manifest
+    except ImportError:
+        from meme_studio_core import render_manifest
 
     if len(argv) < 4:
         print("用法: render_manifest_template.py <头像图片> <输出路径> <manifest路径>", file=sys.stderr)
