@@ -185,6 +185,7 @@ astrbot_plugin_meme_studio/
 - 子进程使用参数列表执行，不拼接 shell 字符串。
 - 每次生成都有超时控制，异常会返回友好提示。
 - Meme Studio 生成命令只接受 `data/<模板名>/manifest.json` 形式的 manifest。
+- 带 token 的 Meme Studio URL 应视为 secret；推荐仅通过 localhost 或受信任的 SSH tunnel 访问，不要分享完整 URL、日志或截图，如已暴露请重启 Studio 生成新 token。
 - 打包脚本会排除 `.git`、缓存、测试目录、构建目录、本地导出目录和可执行文件。
 
 更完整的审核说明见 [SECURITY_REVIEW.md](./SECURITY_REVIEW.md)。

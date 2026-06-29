@@ -4,7 +4,10 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator, Optional
 
 from PIL import Image
 
@@ -23,27 +26,72 @@ class MemeStudioServerTest(unittest.TestCase):
 
     def test_api_templates_requires_token_when_auth_configured(self):
         with tempfile.TemporaryDirectory() as tmp:
-            server = create_server(Path(tmp), port=0, auth_config=StudioAuthConfig("secret"))
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
+                url = self._server_url(server, "/api/templates")
 
-            try:
-                thread.start()
-                url = f"http://127.0.0.1:{server.server_address[1]}/api/templates"
-
-                with self.assertRaises(urllib.error.HTTPError) as raised:
-                    urllib.request.urlopen(url, timeout=5)
-                self.assertEqual(raised.exception.code, 401)
-                self.assertEqual(json.loads(raised.exception.read().decode("utf-8")), {"error": "unauthorized"})
+                error = self._expect_http_error(url, 401)
+                self.assertEqual(json.loads(error.read().decode("utf-8")), {"error": "unauthorized"})
 
                 request = urllib.request.Request(url, headers={"Authorization": "Bearer secret"})
                 with urllib.request.urlopen(request, timeout=5) as response:
                     self.assertEqual(response.status, 200)
                     payload = json.loads(response.read().decode("utf-8"))
                 self.assertIn("templates", payload)
-            finally:
-                server.shutdown()
-                server.server_close()
-                thread.join(timeout=5)
+
+    def test_api_templates_accepts_query_token_when_auth_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
+                url = self._server_url(server, "/api/templates?token=secret")
+
+                with urllib.request.urlopen(url, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    payload = json.loads(response.read().decode("utf-8"))
+
+                self.assertIn("templates", payload)
+
+    def test_static_resources_do_not_require_token_when_auth_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
+                for path in ("/", "/app.js"):
+                    with self.subTest(path=path):
+                        with urllib.request.urlopen(self._server_url(server, path), timeout=5) as response:
+                            self.assertEqual(response.status, 200)
+                            self.assertGreater(len(response.read()), 0)
+
+    def test_api_templates_allows_legacy_access_without_auth_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._start_server(Path(tmp), auth_config=None) as server:
+                with urllib.request.urlopen(self._server_url(server, "/api/templates"), timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    payload = json.loads(response.read().decode("utf-8"))
+
+                self.assertIn("templates", payload)
+
+    def test_post_without_token_rejects_before_json_parse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
+                invalid_json_body = b'{"files": ['
+                request = urllib.request.Request(
+                    self._server_url(server, "/api/upload"),
+                    data=invalid_json_body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+
+                error = self._expect_http_error(request, 401)
+
+                self.assertEqual(json.loads(error.read().decode("utf-8")), {"error": "unauthorized"})
+
+    def test_preview_get_requires_token_before_existence_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
+                for path in (
+                    "/api/projects/missing-project/preview.png",
+                    "/api/templates/missing-template/preview.png",
+                ):
+                    with self.subTest(path=path):
+                        error = self._expect_http_error(self._server_url(server, path), 401)
+                        self.assertEqual(json.loads(error.read().decode("utf-8")), {"error": "unauthorized"})
 
     def test_upload_decomposes_gif_into_project_frames(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -225,6 +273,27 @@ class MemeStudioServerTest(unittest.TestCase):
             session_root=root / ".meme_studio_sessions",
             export_root=root / "exports",
         )
+
+    @contextmanager
+    def _start_server(self, root: Path, auth_config: Optional[StudioAuthConfig] = None) -> Iterator[ThreadingHTTPServer]:
+        server = create_server(root, port=0, auth_config=auth_config)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        try:
+            thread.start()
+            yield server
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def _server_url(self, server: ThreadingHTTPServer, path: str) -> str:
+        return f"http://127.0.0.1:{server.server_address[1]}{path}"
+
+    def _expect_http_error(self, request: object, status: int) -> urllib.error.HTTPError:
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            urllib.request.urlopen(request, timeout=5)
+        self.assertEqual(raised.exception.code, status)
+        return raised.exception
 
     def _make_manifest(self, project: dict, command: str = "测试生成", output: str = "gif") -> dict:
         return {

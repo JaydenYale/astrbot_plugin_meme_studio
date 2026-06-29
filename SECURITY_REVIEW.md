@@ -9,6 +9,12 @@
 - 每次表情生成使用独立临时目录，结束后清理；启动时会清理过期任务目录。
 - 脚本路径通过 `Path.resolve()` 和 `relative_to()` 限制在 `scripts/` 目录内。
 
+## Meme Studio 访问令牌边界
+
+- Meme Studio API 支持 Bearer token；静态入口资源保持无 token 可访问，旧的无鉴权启动方式在 `auth_config=None` 时仍兼容。
+- 预览图由浏览器 `<img>` 加载，无法附带 `Authorization` header，因此预览图 URL 会通过 query string 携带 token；这类 token URL 只应在 localhost 或受信任隧道环境使用，避免外泄到聊天、日志、截图、浏览器历史或第三方代理。
+- 如带 token 的 Studio URL 已经暴露，应重启 Studio 生成新的访问 token。
+
 ## 输入边界
 
 - 远程图片只允许 `http` 与 `https`。
