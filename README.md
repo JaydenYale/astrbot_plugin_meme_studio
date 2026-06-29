@@ -155,13 +155,16 @@ astrbot_plugin_meme_studio/
 ├─ meme_commands.py                # 内置命令和 Meme Studio 生成命令的统一注册表
 ├─ meme_studio_core.py             # 模板渲染、GIF 分解、manifest 处理
 ├─ meme_studio_launcher.py         # 本地制作器启动逻辑
-├─ meme_studio/                    # 本地模板运行时与可选 meme-generator 适配层
+├─ meme_studio/                    # 本地模板运行时、制作器服务与可选 meme-generator 适配层
+│  └─ web/                         # 本地 Meme Studio 制作器前端资源
 ├─ generated_meme_commands.json    # Meme Studio 生成命令列表
 ├─ _conf_schema.json               # AstrBot 配置面板 schema
 ├─ data/                           # 内置素材和生成模板素材
 ├─ scripts/                        # 内置脚本和 manifest 渲染脚本
 ├─ tools/
-│  ├─ meme_studio/                 # 本地浏览器制作器前后端
+│  ├─ meme_studio.py               # 本地制作器启动入口
+│  ├─ meme_studio/
+│  │  └─ server.py                 # 兼容旧路径的制作器服务 re-export
 │  ├─ build_meme_studio_exe.py     # 本地构建 MemeStudio.exe
 │  ├─ generate_conf_schema.py      # 重新生成配置 schema
 │  └─ package_plugin_zip.py        # 生成 AstrBot 可上传安装包

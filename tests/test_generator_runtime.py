@@ -331,6 +331,26 @@ class GeneratorRuntimeHandleTest(unittest.IsolatedAsyncioTestCase):
         with PILImage.open(io.BytesIO(output)) as image:
             self.assertLessEqual(max(image.size), 512)
 
+    async def test_compress_static_image_keeps_animated_gif_unchanged(self):
+        original = make_gif(320, 180)
+        engine = StaticImageEngine(original)
+        runtime = MemeGeneratorRuntime(engine, GeneratorRuntimeConfig(generator_compress_static=True))
+
+        results = await collect_async(runtime.handle(FakeEvent("/wide"), image_loader=lambda source: b""))
+
+        output = results[0].chain[0].data
+        self.assertEqual(output, original)
+
+    async def test_compress_static_image_can_be_disabled(self):
+        original = make_png(900, 300)
+        engine = StaticImageEngine(original)
+        runtime = MemeGeneratorRuntime(engine, GeneratorRuntimeConfig(generator_compress_static=False))
+
+        results = await collect_async(runtime.handle(FakeEvent("/wide"), image_loader=lambda source: b""))
+
+        output = results[0].chain[0].data
+        self.assertEqual(output, original)
+
 
 class MemeStudioRuntimeDispatchTest(unittest.IsolatedAsyncioTestCase):
     async def test_local_command_priority_does_not_call_generator_runtime(self):
@@ -348,6 +368,23 @@ class MemeStudioRuntimeDispatchTest(unittest.IsolatedAsyncioTestCase):
 def make_png(width, height):
     buffer = io.BytesIO()
     PILImage.new("RGB", (width, height), (40, 120, 200)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def make_gif(width, height):
+    buffer = io.BytesIO()
+    frames = [
+        PILImage.new("RGB", (width, height), (220, 40, 60)),
+        PILImage.new("RGB", (width, height), (40, 120, 220)),
+    ]
+    frames[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=80,
+        loop=0,
+    )
     return buffer.getvalue()
 
 
