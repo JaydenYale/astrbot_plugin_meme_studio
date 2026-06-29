@@ -146,13 +146,63 @@ def all_meme_commands(generated_path: Optional[Path] = None) -> Tuple[MemeComman
 MEME_COMMANDS = all_meme_commands()
 MEME_COMMANDS_BY_NAME = {command.name: command for command in MEME_COMMANDS}
 
+GENERATOR_CONF_SCHEMA: Dict[str, Dict[str, object]] = {
+    "generator_enabled": {
+        "type": "bool",
+        "description": "启用 meme-generator 大表情库引擎",
+        "hint": "关闭后仅保留本地和 Meme Studio 模板。无法安装 generator 依赖或资源时可设为 false。",
+        "default": True,
+    },
+    "generator_need_prefix": {
+        "type": "bool",
+        "description": "meme-generator 需要触发前缀",
+        "hint": "启用后需要 /、全角 ／，或通过唤醒/提及机器人触发 generator 表情。",
+        "default": True,
+    },
+    "generator_extra_prefix": {
+        "type": "string",
+        "description": "meme-generator 额外触发前缀",
+        "hint": "留空则不要求额外前缀；填写后消息必须先以该前缀开头，例如 !/关键词。",
+        "default": "",
+    },
+    "generator_fuzzy_match": {
+        "type": "bool",
+        "description": "启用 meme-generator 模糊匹配",
+        "hint": "开启后消息中包含关键词即可触发 generator 表情，容易误触，建议谨慎开启。",
+        "default": False,
+    },
+    "generator_timeout_seconds": {
+        "type": "int",
+        "description": "meme-generator 生成超时时长",
+        "hint": "单次 generator 表情生成的超时时间，单位秒。",
+        "slider": {
+            "min": 5,
+            "max": 120,
+            "step": 5,
+        },
+        "default": 15,
+    },
+    "generator_compress_static": {
+        "type": "bool",
+        "description": "压缩 meme-generator 静态输出",
+        "hint": "开启后会将过大的静态 generator 输出缩放到较安全的尺寸；GIF 动图保持原样。",
+        "default": True,
+    },
+    "generator_disabled_list": {
+        "type": "list",
+        "description": "meme-generator 禁用关键词",
+        "hint": "列表里的关键词不会触发 generator 引擎；本地和 Meme Studio 模板开关不受影响。",
+        "default": [],
+    },
+}
+
 
 def build_conf_schema(
     commands: Optional[Iterable[MemeCommand]] = None,
     generated_path: Optional[Path] = None,
 ) -> Dict[str, Dict[str, object]]:
     schema_commands = tuple(commands) if commands is not None else all_meme_commands(generated_path)
-    return {
+    command_schema = {
         command.name: {
             "type": "bool",
             "description": "开启{}".format(command.name),
@@ -160,3 +210,4 @@ def build_conf_schema(
         }
         for command in schema_commands
     }
+    return dict(GENERATOR_CONF_SCHEMA, **command_schema)

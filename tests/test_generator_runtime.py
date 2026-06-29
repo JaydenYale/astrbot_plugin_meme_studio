@@ -1,7 +1,10 @@
 import asyncio
+import io
 import sys
 import types
 import unittest
+
+from PIL import Image as PILImage
 
 
 class FakeLogger:
@@ -153,6 +156,22 @@ class FakeEngine:
         return b"generated-image"
 
 
+class StaticImageEngine(FakeEngine):
+    def __init__(self, image_bytes):
+        super().__init__()
+        self.image_bytes = image_bytes
+
+    def match_keyword(self, text, fuzzy, disabled):
+        return "wide" if text.startswith("wide") else None
+
+    def _params(self, meme):
+        return GeneratorParams(min_images=0, max_images=0, min_texts=0, max_texts=0)
+
+    async def generate(self, keyword, images, texts, options):
+        self.generated.append((keyword, images, texts, options))
+        return self.image_bytes
+
+
 class UnavailableEngine:
     available = False
 
@@ -301,6 +320,17 @@ class GeneratorRuntimeHandleTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(engine.generated, [])
         self.assertTrue("图片" in results[0].text or "读取" in results[0].text)
 
+    async def test_compress_static_image_resizes_large_generator_output(self):
+        original = make_png(900, 300)
+        engine = StaticImageEngine(original)
+        runtime = MemeGeneratorRuntime(engine, GeneratorRuntimeConfig(generator_compress_static=True))
+
+        results = await collect_async(runtime.handle(FakeEvent("/wide"), image_loader=lambda source: b""))
+
+        output = results[0].chain[0].data
+        with PILImage.open(io.BytesIO(output)) as image:
+            self.assertLessEqual(max(image.size), 512)
+
 
 class MemeStudioRuntimeDispatchTest(unittest.IsolatedAsyncioTestCase):
     async def test_local_command_priority_does_not_call_generator_runtime(self):
@@ -313,6 +343,12 @@ class MemeStudioRuntimeDispatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(fake_generator.called)
         self.assertEqual(len(results), 1)
         self.assertIn("指令需要带图发送", results[0].text)
+
+
+def make_png(width, height):
+    buffer = io.BytesIO()
+    PILImage.new("RGB", (width, height), (40, 120, 200)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 if __name__ == "__main__":

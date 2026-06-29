@@ -1,10 +1,12 @@
 import asyncio
+import io
 import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from astrbot.api import logger
 from astrbot.api.message_components import Image
+from PIL import Image as PILImage
 
 try:
     from .generator_engine import GeneratorEngine, GeneratorParams
@@ -145,6 +147,9 @@ class MemeGeneratorRuntime:
         if not image_bytes:
             return
 
+        if self.config.generator_compress_static:
+            image_bytes = _compress_static_image(image_bytes)
+
         yield _image_result(event, image_bytes)
 
     async def _handle_special_command(self, event: Any, command_text: str) -> Optional[Any]:
@@ -261,6 +266,28 @@ def _image_result(event: Any, image_bytes: bytes) -> Any:
     result = event.make_result()
     result.chain = [Image.fromBytes(image_bytes)]
     return result
+
+
+def _compress_static_image(image_bytes: bytes, max_side: int = 512) -> bytes:
+    try:
+        with PILImage.open(io.BytesIO(image_bytes)) as image:
+            if getattr(image, "is_animated", False):
+                return image_bytes
+            if max(image.size) <= max_side:
+                return image_bytes
+
+            image = image.copy()
+            image.thumbnail((max_side, max_side), _pil_lanczos())
+            output = io.BytesIO()
+            image.save(output, format="PNG", optimize=True)
+            return output.getvalue()
+    except Exception:
+        return image_bytes
+
+
+def _pil_lanczos() -> int:
+    resampling = getattr(PILImage, "Resampling", PILImage)
+    return getattr(resampling, "LANCZOS")
 
 
 async def _maybe_await(value: Any) -> Any:

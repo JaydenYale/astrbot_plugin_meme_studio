@@ -49,6 +49,7 @@ httpx>=0.24.0
 numpy>=1.24.0
 opencv-python-headless>=4.8.0
 pil-utils>=0.1.7
+meme_generator~=0.2.0
 ```
 
 如果 AstrBot 环境没有自动安装依赖，可以在插件目录手动执行：
@@ -84,6 +85,30 @@ pip install -r requirements.txt
 ```
 
 完整开关可以在 AstrBot 插件配置面板查看。
+
+## meme-generator 大表情库引擎
+
+插件保留本地内置模板和 Meme Studio 生成模板作为第一优先级：当本地模板和 generator 关键词重名时，优先执行本地/Studio 模板。`meme-generator` 是额外接入的可选大表情库引擎，用来补充更多关键词表情。
+
+常用示例：
+
+```text
+/meme帮助
+/meme详情 <关键词>
+/<关键词> @用户 文本 key=value
+```
+
+默认需要 `/` 或全角 `／` 前缀，也可以通过唤醒/提及机器人触发。管理员可在配置面板调整 `generator_need_prefix`、`generator_extra_prefix`、`generator_fuzzy_match`、`generator_timeout_seconds`、`generator_compress_static` 和 `generator_disabled_list`。
+
+如果服务器不希望启用 generator，或运行环境无法安装/加载它的依赖与资源，可以在插件配置中设置：
+
+```text
+generator_enabled=false
+```
+
+Linux 或 Docker 环境中，`meme-generator` 及其图片处理链路可能需要额外的图形和字体相关系统库，例如 fontconfig、freetype、libGL 或发行版对应的兼容包。不同镜像报错不同，建议按启动或生成时的缺库提示补齐。
+
+本次集成参考了 `astrbot_plugin_memelite` 将 AstrBot 层与 meme 引擎分离的架构思想，但没有复制、vendored 或改写它的源码；两者许可不同，因此本项目只通过公开的 `meme-generator` 包实现自己的适配层。
 
 ## Meme Studio
 
@@ -130,6 +155,7 @@ astrbot_plugin_meme_studio/
 ├─ meme_commands.py                # 内置命令和 Meme Studio 生成命令的统一注册表
 ├─ meme_studio_core.py             # 模板渲染、GIF 分解、manifest 处理
 ├─ meme_studio_launcher.py         # 本地制作器启动逻辑
+├─ meme_studio/                    # 本地模板运行时与可选 meme-generator 适配层
 ├─ generated_meme_commands.json    # Meme Studio 生成命令列表
 ├─ _conf_schema.json               # AstrBot 配置面板 schema
 ├─ data/                           # 内置素材和生成模板素材
