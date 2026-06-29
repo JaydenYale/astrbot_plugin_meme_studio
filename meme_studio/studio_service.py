@@ -349,7 +349,7 @@ class MemeStudioService:
         draw = ImageDraw.Draw(canvas)
         draw.rectangle((0, PREVIEW_SIZE[1] - 54, PREVIEW_SIZE[0], PREVIEW_SIZE[1]), fill=(255, 255, 255, 220))
         draw.text((14, PREVIEW_SIZE[1] - 44), "Preview unavailable", fill=(32, 36, 44))
-        draw.text((14, PREVIEW_SIZE[1] - 24), _clip_preview_reason(reason), fill=(102, 112, 133))
+        draw.text((14, PREVIEW_SIZE[1] - 24), _preview_placeholder_reason(reason), fill=(102, 112, 133))
         if preview_ext == "gif":
             canvas.convert("P", palette=Image.Palette.ADAPTIVE).save(preview_path, format="GIF", loop=0)
             return
@@ -406,14 +406,14 @@ class MemeStudioService:
     def _preview_ext(self, command: str) -> str:
         generated_entry = self._generated_payload_entry(command)
         if generated_entry is not None:
-            return _normalize_preview_ext(str(generated_entry.get("output", "gif")))
+            return _preview_ext_for_output(str(generated_entry.get("output", "gif")))
         builtin_command = self._builtin_command(command)
         if builtin_command is not None:
-            return _normalize_preview_ext(builtin_command.output_ext)
+            return _preview_ext_for_output(builtin_command.output_ext)
         raise FileNotFoundError(f"未找到表情：{command}")
 
     def _preview_url(self, command: str, output_ext: str) -> str:
-        preview_ext = _normalize_preview_ext(output_ext)
+        preview_ext = _preview_ext_for_output(output_ext)
         return f"/api/templates/{quote(command, safe='')}/preview.{preview_ext}"
 
     def _preview_cache_path(self, command: str, preview_ext: str) -> Path:
@@ -458,7 +458,7 @@ def _file_bytes(file_info: Dict[str, object]) -> bytes:
     raise TypeError("上传文件 data 必须是 bytes")
 
 
-def _clip_preview_reason(reason: str, limit: int = 42) -> str:
+def _preview_placeholder_reason(reason: str, limit: int = 42) -> str:
     normalized = " ".join(reason.split())
     normalized = normalized.encode("ascii", errors="ignore").decode("ascii").strip() or "Open details for info"
     if len(normalized) <= limit:
@@ -466,5 +466,5 @@ def _clip_preview_reason(reason: str, limit: int = 42) -> str:
     return f"{normalized[:limit]}..."
 
 
-def _normalize_preview_ext(output_ext: str) -> str:
+def _preview_ext_for_output(output_ext: str) -> str:
     return "png" if output_ext.lower() == "png" else "gif"

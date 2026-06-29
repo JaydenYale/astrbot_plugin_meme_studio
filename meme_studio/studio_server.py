@@ -9,7 +9,7 @@ from typing import Dict, List
 from urllib.parse import unquote, urlparse
 
 from .renderer import validate_command_name
-from .studio_service import MemeStudioService, _clip_preview_reason, _normalize_preview_ext
+from .studio_service import MemeStudioService
 
 
 MAX_JSON_BYTES = 80 * 1024 * 1024
@@ -152,3 +152,15 @@ def _decode_uploads(files: List[Dict[str, object]]) -> List[Dict[str, object]]:
             data = data.split(",", 1)[1]
         decoded.append({"name": str(file_info["name"]), "data": base64.b64decode(data)})
     return decoded
+
+
+def _clip_preview_reason(reason: str, limit: int = 42) -> str:
+    normalized = " ".join(reason.split())
+    normalized = normalized.encode("ascii", errors="ignore").decode("ascii").strip() or "Open details for info"
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit]}..."
+
+
+def _normalize_preview_ext(output_ext: str) -> str:
+    return "png" if output_ext.lower() == "png" else "gif"
