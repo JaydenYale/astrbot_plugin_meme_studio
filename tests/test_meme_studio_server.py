@@ -1,11 +1,16 @@
 import json
 import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from PIL import Image
 
 from meme_commands import BUILTIN_MEME_COMMANDS
+from meme_studio.studio_security import StudioAuthConfig
+from meme_studio.studio_server import create_server
 from meme_studio.studio_service import MemeStudioService
 
 
@@ -15,6 +20,30 @@ class MemeStudioServerTest(unittest.TestCase):
         from tools.meme_studio.server import MemeStudioService as LegacyMemeStudioService
 
         self.assertIs(LegacyMemeStudioService, MemeStudioService)
+
+    def test_api_templates_requires_token_when_auth_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = create_server(Path(tmp), port=0, auth_config=StudioAuthConfig("secret"))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+
+            try:
+                thread.start()
+                url = f"http://127.0.0.1:{server.server_address[1]}/api/templates"
+
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    urllib.request.urlopen(url, timeout=5)
+                self.assertEqual(raised.exception.code, 401)
+                self.assertEqual(json.loads(raised.exception.read().decode("utf-8")), {"error": "unauthorized"})
+
+                request = urllib.request.Request(url, headers={"Authorization": "Bearer secret"})
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    payload = json.loads(response.read().decode("utf-8"))
+                self.assertIn("templates", payload)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
 
     def test_upload_decomposes_gif_into_project_frames(self):
         with tempfile.TemporaryDirectory() as tmp:

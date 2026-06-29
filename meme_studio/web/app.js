@@ -7,6 +7,13 @@ const state = {
   templates: [],
 };
 
+const queryParams = new URLSearchParams(window.location.search);
+const queryToken = queryParams.get("token") || "";
+const authToken = queryToken || localStorage.getItem("memeStudioToken") || "";
+if (queryToken) {
+  localStorage.setItem("memeStudioToken", queryToken);
+}
+
 const els = {
   status: document.getElementById("status"),
   commandName: document.getElementById("commandName"),
@@ -160,7 +167,7 @@ function renderTimeline() {
 function renderFrame() {
   if (!state.frames.length) return;
   const fileName = state.frames[state.current].file.split("/").pop();
-  els.frameImage.src = `/api/projects/${state.projectId}/frames/${encodeURIComponent(fileName)}`;
+  els.frameImage.src = withAuthToken(`/api/projects/${state.projectId}/frames/${encodeURIComponent(fileName)}`);
   els.frameImage.style.display = "block";
   els.empty.style.display = "none";
   els.rotation.value = String(currentSlot().rotation);
@@ -274,9 +281,13 @@ function buildManifest() {
 }
 
 async function postJson(url, payload) {
+  const headers = {"Content-Type": "application/json"};
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
   const response = await fetch(url, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers,
     body: JSON.stringify(payload),
   });
   const data = await response.json();
@@ -287,7 +298,8 @@ async function postJson(url, payload) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url);
+  const headers = authToken ? {Authorization: `Bearer ${authToken}`} : {};
+  const response = await fetch(url, {headers});
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.error || "请求失败");
@@ -325,7 +337,7 @@ function renderTemplateList() {
     preview.className = "template-preview";
     preview.loading = "lazy";
     preview.alt = `/${template.name} 预览`;
-    preview.src = template.preview_url;
+    preview.src = withAuthToken(template.preview_url);
     preview.addEventListener("click", () => showTemplateDetails(template));
 
     const info = document.createElement("div");
@@ -446,7 +458,7 @@ function enableButtons(enabled) {
 }
 
 function showResultPreview(src, alt) {
-  els.resultPreview.src = src;
+  els.resultPreview.src = withAuthToken(src);
   els.resultPreview.alt = alt;
   els.resultPreview.style.display = "block";
 }
@@ -459,6 +471,14 @@ function hideResultPreview() {
 
 function setStatus(text) {
   els.status.textContent = text;
+}
+
+function withAuthToken(url) {
+  if (!authToken) {
+    return url;
+  }
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${encodeURIComponent(authToken)}`;
 }
 
 if (typeof window !== "undefined") {

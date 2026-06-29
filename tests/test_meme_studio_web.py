@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MemeStudioWebTest(unittest.TestCase):
+    def test_web_client_sends_bearer_token(self):
+        script = (ROOT / "meme_studio" / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("Authorization", script)
+        self.assertIn("Bearer", script)
+        self.assertIn("memeStudioToken", script)
+
     def test_avatar_slot_is_clamped_inside_frame_bounds(self):
         script = textwrap.dedent(
             f"""
@@ -37,6 +44,7 @@ class MemeStudioWebTest(unittest.TestCase):
             }}
 
             const elements = {{}};
+            const storage = {{}};
             const document = {{
               getElementById: (id) => elements[id] || (elements[id] = makeElement()),
               querySelector: (selector) => elements[selector] || (elements[selector] = makeElement()),
@@ -46,7 +54,12 @@ class MemeStudioWebTest(unittest.TestCase):
             const context = {{
               console,
               document,
-              window: {{addEventListener: () => {{}}}},
+              window: {{addEventListener: () => {{}}, location: {{search: ""}}}},
+              localStorage: {{
+                getItem: (key) => storage[key] || null,
+                setItem: (key, value) => {{ storage[key] = String(value); }},
+              }},
+              URLSearchParams,
               fetch: async () => ({{ok: true, json: async () => ({{templates: []}})}}),
               FileReader: function() {{}},
               Promise,

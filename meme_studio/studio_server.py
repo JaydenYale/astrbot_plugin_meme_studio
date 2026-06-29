@@ -5,10 +5,11 @@ import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
 from .renderer import validate_command_name
+from .studio_security import StudioAuthConfig, extract_request_token, token_matches
 from .studio_service import MemeStudioService
 
 
@@ -16,7 +17,12 @@ MAX_JSON_BYTES = 80 * 1024 * 1024
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 
-def create_server(project_root: Path, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
+def create_server(
+    project_root: Path,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    auth_config: Optional[StudioAuthConfig] = None,
+) -> ThreadingHTTPServer:
     service = MemeStudioService(
         project_root=project_root,
         session_root=project_root / ".meme_studio_sessions",
@@ -32,6 +38,9 @@ def create_server(project_root: Path, host: str = "127.0.0.1", port: int = 8765)
             if parsed.path in {"/app.js", "/styles.css"}:
                 self._send_file(WEB_ROOT / parsed.path.lstrip("/"))
                 return
+            if parsed.path.startswith("/api/") and not self._is_authorized(parsed):
+                self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
             if parsed.path == "/api/templates":
                 self._send_json({"templates": service.list_applied_templates()})
                 return
@@ -44,30 +53,34 @@ def create_server(project_root: Path, host: str = "127.0.0.1", port: int = 8765)
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
         def do_POST(self) -> None:
+            parsed = urlparse(self.path)
+            if parsed.path.startswith("/api/") and not self._is_authorized(parsed):
+                self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
             try:
                 payload = self._read_json()
-                if self.path == "/api/upload":
+                if parsed.path == "/api/upload":
                     self._send_json(service.upload_files(_decode_uploads(payload.get("files", []))))
                     return
-                if self.path == "/api/decompose-gif":
+                if parsed.path == "/api/decompose-gif":
                     self._send_json(service.upload_files(_decode_uploads([payload["file"]])))
                     return
-                if self.path == "/api/export":
+                if parsed.path == "/api/export":
                     export_dir = service.export_template(str(payload["project_id"]), payload["manifest"])
                     self._send_json({"path": str(export_dir)})
                     return
-                if self.path == "/api/preview-current":
+                if parsed.path == "/api/preview-current":
                     preview_path = service.preview_current_template(str(payload["project_id"]), payload["manifest"])
                     project_id = str(payload["project_id"])
                     self._send_json(
                         {"preview_url": f"/api/projects/{project_id}/{preview_path.name}?v={uuid.uuid4().hex}"}
                     )
                     return
-                if self.path == "/api/apply":
+                if parsed.path == "/api/apply":
                     data_dir = service.apply_template(str(payload["project_id"]), payload["manifest"])
                     self._send_json({"path": str(data_dir), "templates": service.list_applied_templates()})
                     return
-                if self.path == "/api/delete-template":
+                if parsed.path == "/api/delete-template":
                     command = validate_command_name(str(payload.get("command", "")))
                     data_dir = service.delete_template(command)
                     self._send_json(
@@ -84,6 +97,12 @@ def create_server(project_root: Path, host: str = "127.0.0.1", port: int = 8765)
 
         def log_message(self, format: str, *args: object) -> None:
             return
+
+        def _is_authorized(self, parsed) -> bool:
+            if auth_config is None:
+                return True
+            token = extract_request_token(self.headers.get("Authorization", ""), parsed.query)
+            return token_matches(auth_config, token)
 
         def _read_json(self) -> Dict[str, object]:
             content_length = int(self.headers.get("Content-Length", "0"))
