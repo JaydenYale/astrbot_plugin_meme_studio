@@ -1,4 +1,5 @@
 import json
+import socket
 import tempfile
 import threading
 import unittest
@@ -70,17 +71,23 @@ class MemeStudioServerTest(unittest.TestCase):
     def test_post_without_token_rejects_before_json_parse(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self._start_server(Path(tmp), auth_config=StudioAuthConfig("secret")) as server:
-                invalid_json_body = b'{"files": ['
-                request = urllib.request.Request(
-                    self._server_url(server, "/api/upload"),
-                    data=invalid_json_body,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
+                response = self._raw_http_request(
+                    server,
+                    "\r\n".join(
+                        [
+                            "POST /api/upload HTTP/1.1",
+                            "Host: 127.0.0.1",
+                            "Content-Type: application/json",
+                            "Content-Length: 1048576",
+                            "Connection: close",
+                            "",
+                            "",
+                        ]
+                    ).encode("ascii"),
                 )
 
-                error = self._expect_http_error(request, 401)
-
-                self.assertEqual(json.loads(error.read().decode("utf-8")), {"error": "unauthorized"})
+                self.assertIn(b" 401 ", response.splitlines()[0])
+                self.assertIn(b'{"error": "unauthorized"}', response)
 
     def test_preview_get_requires_token_before_existence_check(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -294,6 +301,17 @@ class MemeStudioServerTest(unittest.TestCase):
             urllib.request.urlopen(request, timeout=5)
         self.assertEqual(raised.exception.code, status)
         return raised.exception
+
+    def _raw_http_request(self, server: ThreadingHTTPServer, payload: bytes) -> bytes:
+        with socket.create_connection(("127.0.0.1", server.server_address[1]), timeout=5) as client:
+            client.sendall(payload)
+            chunks = []
+            while True:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        return b"".join(chunks)
 
     def _make_manifest(self, project: dict, command: str = "测试生成", output: str = "gif") -> dict:
         return {
