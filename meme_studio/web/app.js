@@ -482,5 +482,10 @@ function withAuthToken(url) {
 }
 
 if (typeof window !== "undefined") {
-  window.__memeStudioTest = {clampSlotToFrame};
+  window.__memeStudioTest = {
+    clampSlotToFrame,
+    deleteTemplate,
+    renderTemplateList,
+    withAuthToken,
+  };
 }
