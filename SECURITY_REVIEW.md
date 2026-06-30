@@ -12,6 +12,7 @@
 ## Meme Studio 访问令牌边界
 
 - Meme Studio API 支持 Bearer token；静态入口资源保持无 token 可访问，旧的无鉴权启动方式在 `auth_config=None` 时仍兼容。
+- `tools/meme_studio.py` 启动器会为所有管理台会话生成或接收一个访问 token，并把 `auth_config` 传入 HTTP 服务；终端打印和浏览器打开的 URL 都携带该 token。
 - 预览图由浏览器 `<img>` 加载，无法附带 `Authorization` header，因此预览图 URL 会通过 query string 携带 token；这类 token URL 只应在 localhost 或受信任隧道环境使用，避免外泄到聊天、日志、截图、浏览器历史或第三方代理。
 - 如带 token 的 Studio URL 已经暴露，应重启 Studio 生成新的访问 token。
 
@@ -22,6 +23,9 @@
 - 单张输入图片最大 25 MB。
 - Base64 输入使用严格解码，非法 payload 会被拒绝。
 - 本地文件输入同样检查大小。
+- Meme Studio 上传入口只接受 PNG、JPG、JPEG、GIF、WebP，单文件最大 20 MB，单次最多 32 个文件。
+- 上传文件名会被压缩为 basename，并拒绝控制字符、Windows 保留字符和非法扩展名，避免路径穿越或写入意外位置。
+- data URL 上传必须声明 base64；如果声明媒体类型，媒体类型必须在允许列表内并与文件扩展名一致。
 
 ## meme-generator 集成边界
 
